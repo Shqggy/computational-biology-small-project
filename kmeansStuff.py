@@ -53,69 +53,72 @@ def kmeans(points, k):
        centroids = new_centroids
 
 
-def findWeightedCentroids(points, probs):
+def findWeightedCentroids(points, probs, m=2):
     k = len(probs[points[0]])
-    summed_point = [[0] * len(points) for _ in range(k)]
-    cluster_weights = [0] * k
-    for point in points:
-        for i in range(k):
-            for j in range(len(point)):
-                summed_point[j][i] += point[j] * probs[point][j]
-            cluster_weights[i] += probs[point][j]
-
-    for i in range(k):
-        for j in range(len(point)):
-            summed_point[j][i] /= cluster_weights[j]
-
-    for i in range(k):
-        summed_point[i] = tuple(summed_point[i])
+    dim = len(points[0])
+    summed_points = [[0] * dim for _ in range(k)]
+    total_weights = [0] * k
     
-    return list(summed_point)
+    for point in points:
+        for centroid in range(k):
+            w = probs[point][centroid] ** m
+            for i in range(dim):
+                summed_points[centroid][i] += point[i] * w
+            total_weights[centroid] += w
 
-        
+    for centroid in range(k):
+        for i in range(dim):
+            summed_points[centroid][i] /= total_weights[centroid]
+
+    for centroid in range(k):
+        summed_points[centroid] = tuple(summed_points[centroid])
+
+    return summed_points
 
 
-       
-def fuzzykmeans(points, k):
-   centroids = rd.sample(points, k)
-   point_probs = {point:[-1]*k for point in points}
-   clusters = [[] for _ in range(k)]
-   converged = False
-   while True:
-       # categorize each point to a cluster:
-       for point in points:
-           summed_dist = 0
-           for i, centroid in enumerate(centroids):
-               dist = euclidianDist(point, centroid)
-               point_probs[point][i] = dist
-               summed_dist += dist
+def fuzzykmeans(points, k, m=2):
+    centroids = rd.sample(points, k)
+    point_probs = {point:[-1]*k for point in points}
+    while True:
+        clusters = [[] for _ in range(k)]
+        # categorize each point to a cluster:
+        for point in points:
+            summed_dist = 0
+            for i, centroid in enumerate(centroids):
+                dist = max(euclidianDist(point, centroid), 1e-9)
+                inv_dist = 1 / dist ** (2 / (m - 1))
+                point_probs[point][i] = inv_dist
+                summed_dist += inv_dist
+    
+            point_probs[point] = [x/summed_dist for x in point_probs[point]]
+    
+            closest_centroid = point_probs[point].index(max(point_probs[point]))
+            clusters[closest_centroid].append(point)
+    
+        new_centroids = findWeightedCentroids(points, point_probs)
+    
+        for i in range(len(centroids)):
+            if euclidianDist(centroids[i], new_centroids[i]) >= .01:
+                continue
 
-           point_probs[point] = [x/summed_dist for x in point_probs[point]]
+        return {new_centroids[i]:clusters[i] for i in range(k)}
 
-           closest_centroid = point_probs[point].index(max(point_probs[point]))
-           clusters[closest_centroid].append(point)
-       
-       if converged:
-           return {centroids[i]:clusters[i] for i in range(k)}
-
-       new_centroids = findWeightedCentroids(points, point_probs)
-       print(new_centroids)
-
-       converged = True
-       for i in range(len(centroids)):
-           if euclidianDist(centroids[i], new_centroids[i]) >= .01:
-               converged = False
-
-       centroids = new_centroids
            
-
-        
-
 
 def main():
     data_in = []
-    for _ in range(100):
-        data_in.append(tuple([rd.randrange(100) for _ in range(2)]))
+    num_experiments = 3
+    num_samples = 300
+    
+    for _ in range(num_experiments):
+        x_mean = rd.randrange(100)
+        y_mean = rd.randrange(100)
+        stdev = 5 + rd.random() * 8
+
+        for _ in range(num_samples):
+            x = rd.gauss(x_mean, stdev)
+            y = rd.gauss(y_mean, stdev)
+            data_in.append((x, y))
 
     clusters = fuzzykmeans(data_in, 3)
 
